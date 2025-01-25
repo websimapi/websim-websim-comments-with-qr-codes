@@ -1,4 +1,4 @@
-<html><head><base href="."[removed to follow the format and to not cause any issue]
+<html><head><base href ".");
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WebSim Comments with QR Codes</title>
@@ -40,12 +40,6 @@
       font-weight: bold;
     }
 
-    .comment-content {
-      margin-bottom: 15px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
     .qr-codes {
       display: flex;
       gap: 15px;
@@ -66,13 +60,6 @@
       margin-bottom: 5px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .qr-url {
-      font-size: 0.8em;
-      word-break: break-all;
-      max-width: 150px;
-      color: #666;
     }
 
     #iframe-overlay {
@@ -181,13 +168,7 @@
         correctLevel: QRCode.CorrectLevel.H
       });
       
-      const urlText = document.createElement('div');
-      urlText.className = 'qr-url';
-      urlText.textContent = url;
-      
       container.appendChild(qrElement);
-      container.appendChild(urlText);
-      
       container.addEventListener('click', () => openFrame(url));
       
       return container;
@@ -248,6 +229,14 @@
 
     // Create comment element
     function createCommentElement(comment) {
+      const commentText = processCommentText(comment.content);
+      const urls = extractUrls(commentText);
+      
+      // Only create comment element if there are valid websim.ai URLs
+      if (urls.length === 0) {
+        return null;
+      }
+      
       const container = document.createElement('div');
       container.className = 'comment';
       
@@ -271,25 +260,14 @@
       header.appendChild(username);
       header.appendChild(timestamp);
       
-      const content = document.createElement('div');
-      content.className = 'comment-content';
-      const commentText = processCommentText(comment.content);
-      content.textContent = commentText;
-      
       container.appendChild(header);
-      container.appendChild(content);
 
-      // Extract and create QR codes for websim.ai URLs
-      const urls = extractUrls(commentText);
-      
-      if (urls.length > 0) {
-        const qrCodes = document.createElement('div');
-        qrCodes.className = 'qr-codes';
-        urls.forEach(url => {
-          qrCodes.appendChild(createQrCode(url));
-        });
-        container.appendChild(qrCodes);
-      }
+      const qrCodes = document.createElement('div');
+      qrCodes.className = 'qr-codes';
+      urls.forEach(url => {
+        qrCodes.appendChild(createQrCode(url));
+      });
+      container.appendChild(qrCodes);
       
       return container;
     }
@@ -324,7 +302,10 @@
           const comments = await loadComments(projectId, currentCursor);
           
           comments.data.forEach(({comment}) => {
-            commentsContainer.appendChild(createCommentElement(comment));
+            const commentElement = createCommentElement(comment);
+            if (commentElement) {
+              commentsContainer.appendChild(commentElement);
+            }
           });
           
           hasMoreComments = comments.meta.has_next_page;
