@@ -42,6 +42,8 @@
 
     .comment-content {
       margin-bottom: 15px;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .qr-codes {
@@ -160,10 +162,12 @@
   <script>
     // Extract websim.ai URLs from text
     function extractWebsimUrls(text) {
-      const urlRegex = /(?:https?:\/\/)?(?:www\.)?websim\.ai\/[^\s<>[\]{}|\\^]+/g;
-      return (text.match(urlRegex) || []).map(url => 
-        url.startsWith('http') ? url : `https://${url}`
-      );
+      const urlRegex = /(https?:\/\/)?(www\.)?(websim\.ai\/[^\s<>[\]{}|\\^]+)/gi;
+      return Array.from(text.matchAll(urlRegex)).map(match => {
+        const url = match[0];
+        if (url.startsWith('http')) return url;
+        return `https://${url}`;
+      });
     }
 
     // Create QR code element
@@ -279,9 +283,8 @@
       container.appendChild(header);
       container.appendChild(content);
 
+      // Extract and create QR codes for websim.ai URLs
       const websimUrls = extractWebsimUrls(commentText);
-      console.log('Found URLs:', websimUrls);
-      
       if (websimUrls.length > 0) {
         const qrCodes = document.createElement('div');
         qrCodes.className = 'qr-codes';
