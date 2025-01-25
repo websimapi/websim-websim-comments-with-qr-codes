@@ -163,8 +163,8 @@
     // Extract websim.ai URLs from text
     function extractWebsimUrls(text) {
       const urlRegex = /(https?:\/\/)?(www\.)?(websim\.ai\/[^\s<>[\]{}|\\^]+)/gi;
-      return Array.from(text.matchAll(urlRegex)).map(match => {
-        const url = match[0];
+      const matches = text.match(urlRegex) || [];
+      return matches.map(url => {
         if (url.startsWith('http')) return url;
         return `https://${url}`;
       });
@@ -285,6 +285,8 @@
 
       // Extract and create QR codes for websim.ai URLs
       const websimUrls = extractWebsimUrls(commentText);
+      console.log('Found URLs:', websimUrls); // Debug log
+      
       if (websimUrls.length > 0) {
         const qrCodes = document.createElement('div');
         qrCodes.className = 'qr-codes';
