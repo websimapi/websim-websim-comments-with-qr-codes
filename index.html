@@ -160,14 +160,10 @@
   </div>
 
   <script>
-    // Extract websim.ai URLs from text
-    function extractWebsimUrls(text) {
-      const urlRegex = /(https?:\/\/)?(www\.)?(websim\.ai\/[^\s<>[\]{}|\\^]+)/gi;
-      const matches = text.match(urlRegex) || [];
-      return matches.map(url => {
-        if (url.startsWith('http')) return url;
-        return `https://${url}`;
-      });
+    // Extract URLs from text using a URL regex pattern
+    function extractUrls(text) {
+      const urlRegex = /(https?:\/\/[^\s<>[\]{}|\\^]+)/gi;
+      return text.match(urlRegex) || [];
     }
 
     // Create QR code element
@@ -283,14 +279,13 @@
       container.appendChild(header);
       container.appendChild(content);
 
-      // Extract and create QR codes for websim.ai URLs
-      const websimUrls = extractWebsimUrls(commentText);
-      console.log('Found URLs:', websimUrls); // Debug log
+      // Extract and create QR codes for all URLs
+      const urls = extractUrls(commentText);
       
-      if (websimUrls.length > 0) {
+      if (urls.length > 0) {
         const qrCodes = document.createElement('div');
         qrCodes.className = 'qr-codes';
-        websimUrls.forEach(url => {
+        urls.forEach(url => {
           qrCodes.appendChild(createQrCode(url));
         });
         container.appendChild(qrCodes);
