@@ -160,9 +160,10 @@
   <script>
     // Extract websim.ai URLs from text
     function extractWebsimUrls(text) {
-      const urlRegex = /(https?:\/\/)?websim\.ai\/[^\s)}"']+/g;
-      const matches = text.match(urlRegex) || [];
-      return matches.map(url => url.startsWith('http') ? url : `https://${url}`);
+      const urlRegex = /(?:https?:\/\/)?(?:www\.)?websim\.ai\/[^\s<>[\]{}|\\^]+/g;
+      return (text.match(urlRegex) || []).map(url => 
+        url.startsWith('http') ? url : `https://${url}`
+      );
     }
 
     // Create QR code element
@@ -228,8 +229,19 @@
 
     // Process comment text and extract references
     function processCommentText(content) {
-      if (content?.children?.[0]?.children?.[0]?.text) {
-        return content.children[0].children[0].text;
+      if (!content) return '';
+      
+      if (content.children && content.children[0]) {
+        if (content.children[0].children) {
+          return content.children[0].children.map(child => {
+            if (child.type === 'text') return child.text;
+            if (child.type === 'link') return child.url;
+            return '';
+          }).join(' ');
+        }
+        if (content.children[0].text) {
+          return content.children[0].text;
+        }
       }
       return '';
     }
@@ -267,8 +279,9 @@
       container.appendChild(header);
       container.appendChild(content);
 
-      // Extract and add QR codes for websim.ai URLs
       const websimUrls = extractWebsimUrls(commentText);
+      console.log('Found URLs:', websimUrls);
+      
       if (websimUrls.length > 0) {
         const qrCodes = document.createElement('div');
         qrCodes.className = 'qr-codes';
@@ -322,7 +335,6 @@
         
         loadMoreButton.addEventListener('click', loadMoreComments);
         
-        // Load initial comments
         await loadMoreComments();
         
       } catch (error) {
