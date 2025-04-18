@@ -147,10 +147,47 @@
   </div>
 
   <script>
-    // Extract websim.ai URLs from text
-    function extractUrls(text) {
-      const websimUrlRegex = /(https?:\/\/(?:www\.|api\.|party\.)?websim\.ai[^\s<>[\]{}|\\^]+)/gi;
-      return text.match(websimUrlRegex) || [];
+    // Extract websim.ai URLs from text and elements
+    function extractUrls(content) {
+      if (!content) return [];
+      
+      let urls = new Set();
+      
+      // Function to process text content and find websim.ai URLs
+      function findWebsimUrls(text) {
+        // Match any URL that contains websim.ai in the path
+        const websimUrlRegex = /https?:\/\/[^\s<>[\]{}|\\^]+?(?:websim\.ai)[^\s<>[\]{}|\\^]+/gi;
+        const matches = text.match(websimUrlRegex) || [];
+        matches.forEach(url => urls.add(url));
+      }
+
+      // Handle text nodes
+      if (typeof content === 'string') {
+        findWebsimUrls(content);
+      }
+      // Handle document node structure
+      else if (content.children) {
+        content.children.forEach(child => {
+          if (child.type === 'text' && child.text) {
+            findWebsimUrls(child.text);
+          }
+          else if (child.type === 'link' && child.url && child.url.includes('websim.ai')) {
+            urls.add(child.url);
+          }
+          else if (child.children) {
+            child.children.forEach(grandchild => {
+              if (grandchild.type === 'text' && grandchild.text) {
+                findWebsimUrls(grandchild.text);
+              }
+              else if (grandchild.type === 'link' && grandchild.url && grandchild.url.includes('websim.ai')) {
+                urls.add(grandchild.url);
+              }
+            });
+          }
+        });
+      }
+
+      return Array.from(urls);
     }
 
     // Create QR code element
@@ -208,62 +245,43 @@
       return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
     }
 
-    // Process comment content to extract text with proper metadata handling
+    // Process comment text and extract references
     function processCommentText(content) {
       if (!content) return '';
       
       let text = '';
       
-      // Handle document structure properly
-      if (content.type === 'document' && content.children) {
-        // Process each block in the document
-        for (const block of content.children) {
-          // Handle paragraph blocks
-          if (block.type === 'paragraph' && block.children) {
-            for (const inline of block.children) {
-              // Process different types of inline content
-              if (inline.type === 'text') {
-                text += inline.text;
-              } else if (inline.type === 'link') {
-                text += inline.url;
-              } else if (inline.type === 'site') {
-                text += inline.url;
-              } else if (inline.type === 'project') {
-                text += `https://websim.ai/p/${inline.id}`;
-              } else if (inline.children) {
-                // Handle nested content (like link nodes with children)
-                for (const child of inline.children) {
-                  if (child.type === 'text') {
-                    text += child.text;
-                  }
-                }
-              }
-            }
-            text += ' '; // Add space between paragraphs
-          } else if (block.type === 'site_block') {
-            // Handle site blocks
-            text += block.url;
-          } else if (block.type === 'project_block') {
-            // Handle project blocks
-            text += `https://websim.ai/p/${block.id}`;
-          }
+      function processNode(node) {
+        if (!node) return;
+        
+        if (typeof node === 'string') {
+          text += node;
+        }
+        else if (node.type === 'text') {
+          text += node.text;
+        }
+        else if (node.type === 'link') {
+          text += node.url;
+        }
+        
+        if (node.children) {
+          node.children.forEach(processNode);
         }
       }
       
+      processNode(content);
       return text;
     }
 
     // Create comment element
     function createCommentElement(comment) {
-      // Use raw_content first if available (plain text), otherwise process the structured content
-      let commentText = comment.raw_content || processCommentText(comment.content);
-      const urls = extractUrls(commentText);
+      const urls = extractUrls(comment.content);
       
       // Only create comment element if there are valid websim.ai URLs
       if (urls.length === 0) {
         return null;
       }
-      
+
       const container = document.createElement('div');
       container.className = 'comment';
       
