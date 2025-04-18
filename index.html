@@ -208,35 +208,58 @@
       return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
     }
 
-    // Process comment text and extract references
+    // Process comment content to extract text with proper metadata handling
     function processCommentText(content) {
       if (!content) return '';
       
-      if (typeof content === 'string') {
-        return content;
-      }
+      let text = '';
       
+      // Handle document structure properly
       if (content.type === 'document' && content.children) {
-        return content.children.map(block => {
+        // Process each block in the document
+        for (const block of content.children) {
+          // Handle paragraph blocks
           if (block.type === 'paragraph' && block.children) {
-            return block.children.map(child => {
-              if (child.type === 'text') return child.text;
-              if (child.type === 'link') return child.url;
-              return '';
-            }).join(' ');
+            for (const inline of block.children) {
+              // Process different types of inline content
+              if (inline.type === 'text') {
+                text += inline.text;
+              } else if (inline.type === 'link') {
+                text += inline.url;
+              } else if (inline.type === 'site') {
+                text += inline.url;
+              } else if (inline.type === 'project') {
+                text += `https://websim.ai/p/${inline.id}`;
+              } else if (inline.children) {
+                // Handle nested content (like link nodes with children)
+                for (const child of inline.children) {
+                  if (child.type === 'text') {
+                    text += child.text;
+                  }
+                }
+              }
+            }
+            text += ' '; // Add space between paragraphs
+          } else if (block.type === 'site_block') {
+            // Handle site blocks
+            text += block.url;
+          } else if (block.type === 'project_block') {
+            // Handle project blocks
+            text += `https://websim.ai/p/${block.id}`;
           }
-          return '';
-        }).join('\n');
+        }
       }
       
-      return '';
+      return text;
     }
 
     // Create comment element
     function createCommentElement(comment) {
-      const commentText = processCommentText(comment.content);
+      // Use raw_content first if available (plain text), otherwise process the structured content
+      let commentText = comment.raw_content || processCommentText(comment.content);
       const urls = extractUrls(commentText);
       
+      // Only create comment element if there are valid websim.ai URLs
       if (urls.length === 0) {
         return null;
       }
@@ -279,51 +302,31 @@
     let currentCursor = null;
     let hasMoreComments = true;
 
-    const room = new WebsimSocket();
+    async function getCurrentProject() {
+      const project = await window.websim.getCurrentProject();
+      return project.id;
+    }
 
-    async function loadComments() {
-      try {
-        let comments = room.collection('comment').getList();
-        if (!comments || !comments.length) return [];
-        
-        comments = comments.sort((a, b) => 
-          new Date(b.created_at) - new Date(a.created_at)
-        );
-        
-        return {
-          data: comments.map(comment => ({
-            comment: {
-              content: comment.content,
-              created_at: comment.created_at,
-              author: {
-                username: comment.username
-              }
-            }
-          })),
-          meta: {
-            has_next_page: false,
-            end_cursor: null
-          }
-        };
-      } catch (error) {
-        console.error('Error loading comments:', error);
-        return {
-          data: [],
-          meta: {
-            has_next_page: false,
-            end_cursor: null  
-          }
-        };
-      }
+    async function loadComments(projectId, cursor = null) {
+      const params = new URLSearchParams();
+      if (cursor) params.set('after', cursor);
+      params.set('first', '20');
+      
+      const response = await fetch(`/api/v1/projects/${projectId}/comments?${params}`);
+      const data = await response.json();
+      return data.comments;
     }
 
     async function init() {
       try {
+        const projectId = await getCurrentProject();
         const commentsContainer = document.getElementById('comments-list');
         const loadMoreButton = document.getElementById('load-more');
         
         async function loadMoreComments() {
-          const comments = await loadComments();
+          if (!hasMoreComments) return;
+          
+          const comments = await loadComments(projectId, currentCursor);
           
           comments.data.forEach(({comment}) => {
             const commentElement = createCommentElement(comment);
@@ -339,25 +342,8 @@
         }
         
         loadMoreButton.addEventListener('click', loadMoreComments);
+        
         await loadMoreComments();
-
-        room.collection('comment').subscribe(comments => {
-          commentsContainer.innerHTML = '';
-          
-          comments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-            .forEach(comment => {
-              const commentElement = createCommentElement({
-                content: comment.content,
-                created_at: comment.created_at,
-                author: {
-                  username: comment.username
-                }
-              });
-              if (commentElement) {
-                commentsContainer.appendChild(commentElement);
-              }
-            });
-        });
         
       } catch (error) {
         console.error('Error loading comments:', error);
