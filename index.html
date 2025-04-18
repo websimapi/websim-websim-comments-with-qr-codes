@@ -206,7 +206,14 @@
       });
       
       container.appendChild(qrElement);
-      container.addEventListener('click', () => openFrame(url));
+      container.addEventListener('click', () => {
+        // Add https:// if missing
+        let fullUrl = url;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          fullUrl = 'https://' + url;
+        }
+        openFrame(fullUrl);
+      });
       
       return container;
     }
