@@ -212,18 +212,23 @@
     function processCommentText(content) {
       if (!content) return '';
       
-      if (content.children && content.children[0]) {
-        if (content.children[0].children) {
-          return content.children[0].children.map(child => {
-            if (child.type === 'text') return child.text;
-            if (child.type === 'link') return child.url;
-            return '';
-          }).join(' ');
-        }
-        if (content.children[0].text) {
-          return content.children[0].text;
-        }
+      if (typeof content === 'string') {
+        return content;
       }
+      
+      if (content.type === 'document' && content.children) {
+        return content.children.map(block => {
+          if (block.type === 'paragraph' && block.children) {
+            return block.children.map(child => {
+              if (child.type === 'text') return child.text;
+              if (child.type === 'link') return child.url;
+              return '';
+            }).join(' ');
+          }
+          return '';
+        }).join('\n');
+      }
+      
       return '';
     }
 
@@ -232,7 +237,6 @@
       const commentText = processCommentText(comment.content);
       const urls = extractUrls(commentText);
       
-      // Only create comment element if there are valid websim.ai URLs
       if (urls.length === 0) {
         return null;
       }
@@ -275,31 +279,51 @@
     let currentCursor = null;
     let hasMoreComments = true;
 
-    async function getCurrentProject() {
-      const project = await window.websim.getCurrentProject();
-      return project.id;
-    }
+    const room = new WebsimSocket();
 
-    async function loadComments(projectId, cursor = null) {
-      const params = new URLSearchParams();
-      if (cursor) params.set('after', cursor);
-      params.set('first', '20');
-      
-      const response = await fetch(`/api/v1/projects/${projectId}/comments?${params}`);
-      const data = await response.json();
-      return data.comments;
+    async function loadComments() {
+      try {
+        let comments = room.collection('comment').getList();
+        if (!comments || !comments.length) return [];
+        
+        comments = comments.sort((a, b) => 
+          new Date(b.created_at) - new Date(a.created_at)
+        );
+        
+        return {
+          data: comments.map(comment => ({
+            comment: {
+              content: comment.content,
+              created_at: comment.created_at,
+              author: {
+                username: comment.username
+              }
+            }
+          })),
+          meta: {
+            has_next_page: false,
+            end_cursor: null
+          }
+        };
+      } catch (error) {
+        console.error('Error loading comments:', error);
+        return {
+          data: [],
+          meta: {
+            has_next_page: false,
+            end_cursor: null  
+          }
+        };
+      }
     }
 
     async function init() {
       try {
-        const projectId = await getCurrentProject();
         const commentsContainer = document.getElementById('comments-list');
         const loadMoreButton = document.getElementById('load-more');
         
         async function loadMoreComments() {
-          if (!hasMoreComments) return;
-          
-          const comments = await loadComments(projectId, currentCursor);
+          const comments = await loadComments();
           
           comments.data.forEach(({comment}) => {
             const commentElement = createCommentElement(comment);
@@ -315,8 +339,25 @@
         }
         
         loadMoreButton.addEventListener('click', loadMoreComments);
-        
         await loadMoreComments();
+
+        room.collection('comment').subscribe(comments => {
+          commentsContainer.innerHTML = '';
+          
+          comments.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .forEach(comment => {
+              const commentElement = createCommentElement({
+                content: comment.content,
+                created_at: comment.created_at,
+                author: {
+                  username: comment.username
+                }
+              });
+              if (commentElement) {
+                commentsContainer.appendChild(commentElement);
+              }
+            });
+        });
         
       } catch (error) {
         console.error('Error loading comments:', error);
